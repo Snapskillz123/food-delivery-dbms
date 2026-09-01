@@ -1,0 +1,630 @@
+FOOD DELIVERY ORDER & ANALYTICS MANAGEMENT SYSTEM
+COMPLETE PROJECT OVERVIEW AND LLM EXPLANATION CONTEXT
+===================================================
+
+LIVE PROJECT
+------------
+
+Customer website:
+https://food-delivery-api-a5us.onrender.com
+
+Interactive API documentation:
+https://food-delivery-api-a5us.onrender.com/docs
+
+Streamlit analytics dashboard:
+https://food-delivery-dashboard-1stn.onrender.com
+
+GitHub repository:
+https://github.com/Snapskillz123/food-delivery-dbms
+
+The deployed website uses seeded customer ID 1 and address ID 1 by default.
+
+
+1. PROJECT PURPOSE
+------------------
+
+This project is a database-first food-delivery platform inspired by Swiggy and
+Zomato. It supports customers, reusable addresses, restaurants, categorized
+menus, multi-item orders, coupons, payments, delivery agents, status tracking,
+restaurant reviews, delivery reviews, and operational analytics.
+
+The primary purpose is to demonstrate DBMS engineering rather than frontend
+complexity. PostgreSQL is the final integrity boundary, FastAPI coordinates
+business workflows, a responsive customer website uses the real REST API, and
+Streamlit provides an administrative analytics dashboard.
+
+A food-delivery order is more than CRUD. Prices must remain historically
+accurate, items must belong to one active restaurant, coupons have concurrent
+usage limits, totals must be trusted, status changes must follow a legal state
+machine, agents cannot handle conflicting deliveries, payments may require
+refunds, reviews require delivered orders, and all of this data must later
+support meaningful analytics.
+
+
+2. TECHNOLOGY STACK
+-------------------
+
+Database:          PostgreSQL 17
+Backend:           Python and FastAPI
+ORM:               SQLAlchemy 2
+Validation:        Pydantic 2
+Async DB driver:   asyncpg
+Sync DB driver:    psycopg2
+Migrations:        Alembic
+Customer website:  Semantic HTML, responsive CSS, vanilla JavaScript
+Dashboard:         Streamlit, Plotly, pandas
+Testing:           pytest, pytest-asyncio, HTTPX
+Seed generation:   Faker
+Password security: bcrypt through Passlib
+Local environment: Docker and Docker Compose
+Hosting:           Render Blueprint and Render PostgreSQL
+
+The API uses asynchronous database access. Migrations, seed generation,
+integration checks, and the Streamlit dashboard use the synchronous driver
+where appropriate.
+
+
+3. HIGH-LEVEL ARCHITECTURE
+--------------------------
+
+Customer browser
+    |
+    +-- Responsive website
+    |       |
+    |       +-- FastAPI REST endpoints
+    |
+    +-- Swagger/OpenAPI documentation
+                    |
+                    v
+             Pydantic validation
+                    |
+                    v
+        Transactional service layer
+                    |
+                    v
+         SQLAlchemy asynchronous ORM
+                    |
+                    v
+               PostgreSQL
+                    |
+       +------------+-------------+
+       |            |             |
+       v            v             v
+  Constraints    Triggers    Functions and views
+                                      |
+                                      v
+                         Streamlit analytics dashboard
+
+Alembic creates and versions the database. The deterministic Faker seeder
+creates realistic multi-month data. Docker Compose starts the local stack.
+render.yaml provisions the hosted database, API/website, and dashboard.
+
+
+4. DATABASE SCHEMA
+------------------
+
+The database contains 14 tables.
+
+4.1 users
+
+Stores user_id, full_name, unique email, unique phone, password_hash,
+created_at, and updated_at. Passwords are bcrypt hashes, never plaintext.
+One user can own multiple addresses, place multiple orders, and submit reviews.
+
+4.2 addresses
+
+Stores address_id, user_id, label, address line, city, state, postal code,
+coordinates, is_default, and created_at. The order service verifies that the
+selected delivery address belongs to the customer. A partial unique index
+limits a user to one default address.
+
+4.3 restaurants
+
+Stores restaurant identity, cuisine, contact information, location, cached
+rating, active state, opening time, closing time, and created_at. An inactive
+restaurant cannot receive an order. The cached rating is recalculated by a
+database trigger whenever source reviews change.
+
+4.4 menu_categories
+
+Stores restaurant-scoped categories such as Starters, Main Course, Desserts,
+and Beverages. Category names are unique inside a restaurant.
+
+4.5 menu_items
+
+Stores restaurant_id, category_id, name, description, positive price,
+vegetarian flag, availability flag, and timestamps. Cross-table database logic
+ensures that an item's category belongs to the same restaurant. Unavailable
+items cannot be ordered.
+
+4.6 delivery_agents
+
+Stores identity, unique phone and vehicle number, vehicle type, status, cached
+average rating, and created_at. Status is AVAILABLE, BUSY, or OFFLINE. Only an
+AVAILABLE agent can be assigned. Application locking and a partial unique
+index prevent an agent from handling more than one active order.
+
+4.7 orders
+
+The central financial and fulfillment record. It references the customer,
+restaurant, address, and optional delivery agent. It stores status, subtotal,
+delivery fee, tax, discount, final total, and lifecycle timestamps.
+
+Valid statuses are:
+
+PLACED -> ACCEPTED -> PREPARING -> READY_FOR_PICKUP -> PICKED_UP
+       -> OUT_FOR_DELIVERY -> DELIVERED
+
+Cancellation is allowed from PLACED, ACCEPTED, PREPARING, and
+READY_FOR_PICKUP. DELIVERED and CANCELLED are terminal states.
+
+The required financial identity is:
+
+total_amount = subtotal + delivery_fee + tax_amount - discount_amount
+
+All financial values must be nonnegative, and the discount cannot exceed the
+pre-discount amount.
+
+4.8 order_items
+
+Stores one row per order line: order, menu item, quantity, immutable unit-price
+snapshot, and total price. The unit price is copied at checkout so historical
+orders remain correct after menu-price changes. A trigger always derives:
+
+total_price = quantity * unit_price
+
+4.9 order_status_history
+
+Stores order_id, previous_status, new_status, and changed_at. An audit trigger
+automatically creates the initial PLACED event and every later transition.
+
+4.10 payments
+
+Stores one payment lifecycle per order. Methods are UPI, CARD, CASH, and
+WALLET. Statuses are PENDING, SUCCESS, FAILED, and REFUNDED. Successful and
+refunded payments are finalized and cannot be overwritten arbitrarily.
+
+4.11 restaurant_reviews
+
+Stores a 1-to-5 rating and optional text for a delivered order. The reviewer
+and restaurant must match the order. Only one restaurant review is permitted
+per order.
+
+4.12 delivery_reviews
+
+Stores a 1-to-5 rating and optional text for the agent who delivered an order.
+The order must be delivered, and only one delivery review is permitted per
+order.
+
+4.13 coupons
+
+Supports percentage and fixed discounts, minimum order value, optional maximum
+cap, valid-from and valid-until dates, usage limit, usage count, and active
+state. Seed examples include WELCOME20, FLAT75, and an expired coupon.
+
+4.14 order_coupons
+
+Junction table connecting an order to a coupon. It stores discount_applied so
+the exact historical redemption remains available even if coupon configuration
+changes later.
+
+
+5. NORMALIZATION
+----------------
+
+First Normal Form:
+Every field is scalar. Repeating groups are separate relations. For example,
+an order does not contain a comma-separated menu list; lines are stored in
+order_items.
+
+Second Normal Form:
+Non-key values depend on the complete key. Most relations use a surrogate
+single-column key. In the composite order_coupons relation, discount_applied
+depends on the exact order-coupon combination.
+
+Third Normal Form:
+Customer facts exist in users, address facts in addresses, restaurant facts in
+restaurants, payment state in payments, coupon definitions in coupons, and
+review facts in their review tables. Non-key attributes do not depend on other
+non-key attributes.
+
+Intentional redundancy:
+
+1. order_items.unit_price is the immutable checkout-price snapshot.
+2. order_items.total_price supports invoices and analytical access.
+3. Order financial fields preserve the complete invoice snapshot.
+4. Restaurant and agent ratings are cached for frequent reads.
+
+Triggers and constraints maintain the correctness of these derived values.
+
+
+6. TRANSACTIONAL WORKFLOWS
+--------------------------
+
+6.1 Place order
+
+The client submits customer ID, restaurant ID, address ID, item IDs and
+quantities, payment method, and an optional coupon. It never submits totals.
+
+Inside one SQLAlchemy transaction, the service:
+
+1. Validates that the restaurant exists and is active.
+2. Validates that the address belongs to the customer.
+3. Rejects duplicate menu-item lines.
+4. Loads and validates every requested menu item.
+5. Ensures all items belong to the selected restaurant.
+6. Ensures all items are available.
+7. Calculates the subtotal with Decimal arithmetic.
+8. Locks and validates an optional coupon with SELECT FOR UPDATE.
+9. Applies date, active-state, usage, minimum-value, type, and cap rules.
+10. Calculates 5 percent tax and the default 40-rupee delivery fee.
+11. Calculates the final amount.
+12. Creates the order.
+13. Creates immutable order-item snapshots.
+14. Creates a pending payment.
+15. Records coupon redemption and increments usage when applicable.
+16. Lets the status-history trigger create the initial PLACED event.
+17. Commits every write together.
+
+Any failure rolls back the entire operation.
+
+6.2 Cancellation
+
+The service locks the order, validates cancellation eligibility, changes the
+status to CANCELLED, records cancelled_time, refunds a successful payment,
+releases an assigned agent, lets the audit trigger record the transition, and
+commits everything atomically.
+
+6.3 Status progression and delivery completion
+
+Status transitions are validated by both the FastAPI service and PostgreSQL.
+When pickup occurs, an agent is required, the agent row is locked, availability
+and active assignments are checked, and the agent becomes BUSY. On delivery,
+delivered_time is stored and the agent becomes AVAILABLE.
+
+6.4 Payment update
+
+Every order receives one payment record. Pending or failed payments can be
+updated. A successful payment receives paid_at. Successful and refunded
+payments are finalized. Order cancellation changes a successful payment to
+REFUNDED inside the cancellation transaction.
+
+
+7. ACID PROPERTIES
+------------------
+
+Atomicity: Order, lines, payment, coupon use, cancellation, refund, and agent
+changes commit as complete units or roll back.
+
+Consistency: Enums, foreign keys, CHECK constraints, UNIQUE constraints,
+service rules, and triggers reject invalid states.
+
+Isolation: SELECT FOR UPDATE locks contested orders, coupons, delivery agents,
+and payments to reduce conflicting concurrent updates.
+
+Durability: PostgreSQL persists committed data using its transactional storage
+and write-ahead logging.
+
+
+8. POSTGRESQL TRIGGERS
+----------------------
+
+- Status-history trigger records order creation and later status changes.
+- Transition trigger rejects illegal order-state jumps at database level.
+- Restaurant-rating trigger recalculates averages after review changes.
+- Agent-rating trigger recalculates averages after delivery-review changes.
+- Order-line trigger derives quantity times unit price.
+- Financial trigger rejects inconsistent order totals.
+- Cross-table validation protects category ownership and delivered-review
+  ownership rules.
+
+These rules remain effective even if data is written outside FastAPI.
+
+
+9. STORED FUNCTIONS
+-------------------
+
+calculate_order_total(order_id):
+Returns subtotal, tax, delivery fee, discount, and final total.
+
+get_restaurant_monthly_revenue(restaurant_id, year, month):
+Returns delivered revenue, delivered-order count, and average order value.
+
+get_customer_lifetime_value(user_id):
+Returns spending on successfully delivered orders.
+
+get_agent_performance(agent_id):
+Returns completed deliveries, average rating, and average delivery duration.
+
+apply_coupon(coupon_code, order_value):
+Evaluates validity, activity, usage, minimum value, discount type, and cap.
+
+
+10. DATABASE VIEWS
+------------------
+
+restaurant_performance_view:
+Total orders, delivered orders, cancellations, revenue, rating, and AOV.
+
+customer_summary_view:
+Total orders, delivered spending, AOV, and last order date.
+
+delivery_agent_performance_view:
+Completed deliveries, rating, and average delivery time.
+
+daily_sales_view:
+Daily delivered-order count, revenue, and AOV.
+
+
+11. INDEXING AND OPTIMIZATION
+-----------------------------
+
+Indexes support customer and restaurant order history, status filters,
+time-series access, delivered-order filtering, order-item joins, menu
+availability, audit timelines, review aggregation, payment lookup, and coupon
+analysis.
+
+Notable examples include orders(user_id), orders(restaurant_id),
+orders(order_status), orders(order_time), the composite
+orders(restaurant_id, order_time DESC), a delivered-order partial index,
+menu_items(restaurant_id, is_available), and
+order_status_history(order_id, changed_at).
+
+The documentation includes EXPLAIN (ANALYZE, BUFFERS) examples and explains
+sequential scans, index scans, composites, partial indexes, selectivity, and
+the storage/write penalty of excessive indexing.
+
+
+12. ANALYTICAL SQL
+------------------
+
+sql/analytics.sql contains 31 documented queries using joins, subqueries,
+GROUP BY, HAVING, CASE, filtered aggregates, date arithmetic, ordinary CTEs,
+a recursive CTE, RANK, DENSE_RANK, ROW_NUMBER, LAG, and running SUM windows.
+
+The queries analyze restaurant revenue and order rankings, AOV, daily and
+monthly trends, item and cuisine popularity, peak ordering times, repeat-order
+rates, customer lifetime value, spending ranks, month-over-month growth,
+preparation and delivery duration, agent performance, cancellation rates,
+payment distribution, coupon usage, rating versus revenue, dormant customers,
+top-three items per restaurant, revenue contribution, acquisition cohorts,
+inter-order time, restaurant retention, and hourly delays.
+
+
+13. REST API
+------------
+
+Customers:
+POST /users
+GET /users/{id}
+GET /users/{id}/orders
+POST /users/{id}/addresses
+
+Restaurants and menus:
+POST /restaurants
+GET /restaurants
+GET /restaurants/{id}
+GET /restaurants/{id}/menu
+POST /restaurants/{id}/menu-items
+PATCH /menu-items/{id}
+
+Orders:
+POST /orders
+GET /orders/{id}
+GET /orders
+PATCH /orders/{id}/status
+POST /orders/{id}/cancel
+
+Orders can be filtered by status, restaurant, customer, start date, end date,
+and limit.
+
+Payments:
+POST /orders/{id}/payment
+GET /orders/{id}/payment
+
+Reviews:
+POST /orders/{id}/restaurant-review
+POST /orders/{id}/delivery-review
+
+Analytics:
+GET /analytics/restaurants
+GET /analytics/restaurants/{id}?year=&month=
+GET /analytics/customers/{id}
+GET /analytics/delivery-agents/{id}
+GET /analytics/sales/daily
+GET /analytics/sales/monthly
+
+The API uses 404 for missing resources, 409 for state conflicts, 422 for
+invalid business input, and centralized handling for integrity violations.
+
+
+14. CUSTOMER WEBSITE
+--------------------
+
+FastAPI serves a custom responsive website at the root URL. It uses semantic
+HTML, CSS, vanilla JavaScript, the real REST endpoints, and localStorage for
+the cart and demo-profile selection.
+
+Features include restaurant discovery, restaurant/cuisine search, cuisine
+filters, live menus, menu search, vegetarian filtering, one-restaurant cart
+enforcement, persistent quantities, coupon input, payment selection,
+server-calculated checkout, order history, cancellation, live KPIs, daily-sales
+visualization, restaurant leaderboard, loading skeletons, responsive drawers,
+error states, and mobile navigation.
+
+Full JWT authentication is intentionally outside the main DBMS scope. The
+website therefore provides a lightweight seeded customer/address selector.
+
+
+15. STREAMLIT DASHBOARD
+-----------------------
+
+Overview displays revenue, orders, customers, restaurants, AOV, and
+cancellation rate.
+
+Sales Analytics displays daily and monthly revenue plus weekday and hourly
+order volume.
+
+Restaurant Analytics displays revenue/order leaders, ratings, and cancellation
+rates.
+
+Customer Analytics displays top spenders, order-frequency distribution,
+repeat customers, and first-order acquisition trends.
+
+Delivery Analytics displays average delivery time, completed deliveries,
+agent ratings, and hourly late deliveries.
+
+
+16. SEED DATA
+-------------
+
+The deterministic Faker seed uses seed 2026 and generates:
+
+- 100 customers and 100 default addresses
+- 20 restaurants
+- 4 categories per restaurant
+- 240 menu items
+- 25 delivery agents
+- 3 coupons
+- 1,200 multi-month orders
+- Approximately 3,000 order-item lines
+- 1,200 payments
+- Thousands of status events
+- Up to 500 restaurant reviews
+- Delivery reviews for many delivered orders
+
+The data spans approximately 240 days and includes delivered and cancelled
+orders, active orders, successful/pending/failed/refunded payments, coupon use,
+repeat customers, varied cuisines, ratings, order hours, preparation times, and
+delivery durations. Startup seeding is idempotent and skips regeneration when
+at least 1,000 orders already exist.
+
+
+17. TESTING
+-----------
+
+The verified suite produced 9 passed tests and 6 skipped integration tests.
+The integration tests are opt-in because they require an explicitly configured
+disposable PostgreSQL database.
+
+Coverage includes user, address, restaurant, and menu creation; valid checkout;
+server-side totals; invalid and unavailable items; rollback; coupon rules;
+payment creation; cancellation/refunds; state transitions; status-history and
+rating triggers; delivered-review restrictions; agent assignment and
+exclusivity; delivery completion; website shell/assets; and SQL asset coverage.
+
+Real PostgreSQL integration tests are used instead of mocking database triggers
+and transaction behavior.
+
+
+18. DOCKER AND DEPLOYMENT
+-------------------------
+
+Docker Compose starts PostgreSQL, FastAPI/customer website, and Streamlit.
+
+Local commands and URLs:
+
+docker compose up --build
+Website:   http://localhost:8000
+API docs:  http://localhost:8000/docs
+Dashboard: http://localhost:8501
+Database:  localhost:5433
+
+The API waits for PostgreSQL, runs Alembic, runs the idempotent seed, and starts
+Uvicorn.
+
+render.yaml provisions PostgreSQL 17 and separate Docker services for the API
+and dashboard. Database URLs are injected through Render references rather
+than committed. Pushes to main trigger automatic deployments.
+
+
+19. HONEST SCOPE AND LIMITATIONS
+--------------------------------
+
+- JWT authentication and role authorization are not implemented.
+- The customer website uses seeded user/address IDs.
+- PostGIS distance-based delivery is not implemented.
+- Restaurant opening hours are displayed but not yet enforced at checkout.
+- The application is a portfolio/educational system, not a high-traffic
+  production platform.
+- Render free services can sleep and have provider lifecycle limitations.
+- No Redis, Kafka, Kubernetes, microservices, or cloud-specific complexity was
+  added because those would distract from the DBMS objective.
+
+
+20. INTERVIEW EXPLANATION
+-------------------------
+
+Short explanation:
+
+I built a database-first food-delivery management system using PostgreSQL,
+FastAPI, SQLAlchemy, Streamlit, and Docker. The 3NF schema covers customers,
+addresses, restaurants, menus, multi-item orders, delivery agents, payments,
+coupons, reviews, and audited status history. Checkout, cancellation, and
+delivery completion are ACID transactions with row-level locking. PostgreSQL
+constraints and triggers protect totals, immutable price snapshots, review
+eligibility, transitions, ratings, and audit history. The project also includes
+stored functions, views, workload-based indexes, 31 analytical queries, 1,200
+realistic orders, a customer website, a dashboard, tests, Docker, and a live
+Render deployment.
+
+Why use PostgreSQL rules as well as FastAPI?
+
+FastAPI provides understandable workflow errors, while PostgreSQL remains the
+final integrity boundary. Invalid totals, transitions, ratings, or cross-table
+relationships are rejected even when another client bypasses the API.
+
+Most important transaction:
+
+Checkout validates customer ownership, restaurant state, menu ownership,
+availability, and coupon eligibility under locking. It calculates trusted
+Decimal totals and creates the order, immutable lines, payment, coupon
+redemption, and audit history atomically. Failure rolls back everything.
+
+Normalization versus performance:
+
+The design is in 3NF, with deliberate snapshots for historical financial
+correctness and cached aggregate ratings for high-read screens. Triggers keep
+the derived values consistent.
+
+Concurrency:
+
+SELECT FOR UPDATE protects orders, coupons, agents, and payments. A partial
+unique index adds a final database guarantee against multiple active orders for
+one delivery agent.
+
+
+21. RESUME BULLETS
+------------------
+
+- Designed and implemented a 3NF PostgreSQL database for a food-delivery
+  platform covering customer addresses, restaurant menus, multi-item orders,
+  delivery operations, payments, coupon redemptions, and verified reviews.
+
+- Engineered ACID-compliant checkout, cancellation, payment, and fulfillment
+  workflows using SQLAlchemy transactions, row-level locking, rollback
+  protection, guarded state transitions, PostgreSQL triggers, constraints,
+  functions, views, and composite/partial indexes.
+
+- Developed a FastAPI backend, responsive customer website, and Streamlit
+  analytics dashboard over 1,200 realistic orders, using 31 SQL analyses with
+  joins, CTEs, aggregations, and window functions to measure revenue,
+  retention, cohorts, menu demand, cancellations, and delivery performance.
+
+
+22. PROMPT FOR AN LLM TUTOR
+---------------------------
+
+Use this document as the authoritative project context. Teach the project
+progressively:
+
+1. Give a beginner-friendly conceptual explanation.
+2. Explain all entities and relationships.
+3. Walk through checkout, cancellation, and delivery transactions.
+4. Explain every DBMS concept demonstrated and connect it to exact features.
+5. Explain the FastAPI, SQLAlchemy, website, and dashboard architecture.
+6. Explain the analytical SQL, including CTEs and window functions.
+7. Ask interview questions one at a time.
+8. Correct incomplete answers without being vague.
+9. Help create a five-minute project presentation.
+10. Clearly distinguish implemented features from future improvements.
