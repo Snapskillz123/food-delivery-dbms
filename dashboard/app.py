@@ -37,10 +37,10 @@ elif page == "Sales Analytics":
     c1.plotly_chart(px.line(daily,x="sales_date",y="revenue",title="Daily revenue"),use_container_width=True)
     c2.plotly_chart(px.bar(monthly,x="revenue_month",y="revenue",title="Monthly revenue"),use_container_width=True)
     weekday=query("SELECT extract(isodow FROM order_time) n,to_char(order_time,'FMDay') weekday,count(*) orders FROM orders GROUP BY 1,2 ORDER BY 1")
-    hourly=query("SELECT extract(hour FROM order_time)::int hour,count(*) orders FROM orders GROUP BY 1 ORDER BY 1")
+    hourly=query("SELECT extract(hour FROM order_time)::int AS order_hour, count(*) AS orders FROM orders GROUP BY 1 ORDER BY 1")
     c3,c4=st.columns(2)
     c3.plotly_chart(px.bar(weekday,x="weekday",y="orders",title="Order volume by weekday"),use_container_width=True)
-    c4.plotly_chart(px.line(hourly,x="hour",y="orders",markers=True,title="Order volume by hour"),use_container_width=True)
+    c4.plotly_chart(px.line(hourly,x="order_hour",y="orders",markers=True,title="Order volume by hour"),use_container_width=True)
 
 elif page == "Restaurant Analytics":
     data=query("SELECT *,round(100.0*cancelled_orders/NULLIF(total_orders,0),2) cancellation_rate FROM restaurant_performance_view ORDER BY revenue DESC")
@@ -64,11 +64,11 @@ elif page == "Customer Analytics":
 
 else:
     agents=query("SELECT * FROM delivery_agent_performance_view ORDER BY completed_deliveries DESC")
-    delays=query("SELECT extract(hour FROM order_time)::int hour,count(*) FILTER(WHERE delivered_time-order_time>interval '45 minutes') late,count(*) total FROM orders WHERE order_status='DELIVERED' GROUP BY 1 ORDER BY 1")
+    delays=query("SELECT extract(hour FROM order_time)::int AS order_hour, count(*) FILTER(WHERE delivered_time-order_time>interval '45 minutes') AS late, count(*) AS total FROM orders WHERE order_status='DELIVERED' GROUP BY 1 ORDER BY 1")
     avg_minutes=query("SELECT extract(epoch FROM avg(delivered_time-picked_up_time))/60 minutes FROM orders WHERE order_status='DELIVERED'").iloc[0,0]
     st.metric("Average delivery time",f"{avg_minutes:.1f} min")
     c1,c2=st.columns(2)
     c1.plotly_chart(px.bar(agents.head(15),x="completed_deliveries",y="agent",color="average_rating",orientation="h",title="Agent performance"),use_container_width=True)
     c2.plotly_chart(px.scatter(agents,x="completed_deliveries",y="average_rating",hover_name="agent",title="Agent ratings vs deliveries"),use_container_width=True)
-    st.plotly_chart(px.bar(delays,x="hour",y=["late","total"],barmode="group",title="Late deliveries by ordering hour"),use_container_width=True)
+    st.plotly_chart(px.bar(delays,x="order_hour",y=["late","total"],barmode="group",title="Late deliveries by ordering hour"),use_container_width=True)
     st.dataframe(agents,use_container_width=True,hide_index=True)
