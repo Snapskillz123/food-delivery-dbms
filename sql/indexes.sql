@@ -1,0 +1,16 @@
+CREATE INDEX idx_addresses_user ON addresses(user_id);
+CREATE INDEX idx_orders_user ON orders(user_id);
+CREATE INDEX idx_orders_restaurant ON orders(restaurant_id);
+CREATE INDEX idx_orders_status ON orders(order_status);
+CREATE INDEX idx_orders_time ON orders(order_time);
+CREATE INDEX idx_orders_restaurant_time ON orders(restaurant_id, order_time DESC);
+CREATE INDEX idx_orders_delivered_time ON orders(delivered_time) WHERE order_status = 'DELIVERED';
+CREATE INDEX idx_order_items_order ON order_items(order_id);
+CREATE INDEX idx_order_items_menu_item ON order_items(menu_item_id);
+CREATE INDEX idx_menu_items_restaurant_available ON menu_items(restaurant_id, is_available);
+CREATE INDEX idx_status_history_order_time ON order_status_history(order_id, changed_at);
+CREATE INDEX idx_restaurant_reviews_restaurant ON restaurant_reviews(restaurant_id);
+CREATE INDEX idx_delivery_reviews_agent ON delivery_reviews(delivery_agent_id);
+CREATE INDEX idx_payments_order ON payments(order_id);
+CREATE INDEX idx_payments_status ON payments(payment_status);
+CREATE INDEX idx_order_coupons_coupon ON order_coupons(coupon_id);
