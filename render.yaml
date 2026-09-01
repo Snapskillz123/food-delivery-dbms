@@ -14,7 +14,7 @@ services:
     region: singapore
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    dockerCommand: alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    dockerCommand: ./scripts/start_api.sh
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
