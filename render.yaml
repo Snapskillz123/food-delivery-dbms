@@ -14,7 +14,7 @@ services:
     region: singapore
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    dockerCommand: sh -c "alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    dockerCommand: alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
@@ -38,7 +38,7 @@ services:
     region: singapore
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    dockerCommand: sh -c "streamlit run dashboard/app.py --server.address=0.0.0.0 --server.port=$PORT --server.headless=true"
+    dockerCommand: streamlit run dashboard/app.py --server.address=0.0.0.0 --server.port=$PORT --server.headless=true
     healthCheckPath: /_stcore/health
     autoDeployTrigger: commit
     envVars:
