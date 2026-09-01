@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Fork & Route — database-driven food delivery and operational analytics.">
+  <title>Fork & Route · Food delivery, decoded</title>
+  <link rel="icon" href="/site-assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site-assets/styles.css">
+  <script src="/site-assets/app.js" defer></script>
+</head>
+<body>
+  <div class="noise"></div>
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="Fork and Route home">
+      <span class="brand-mark">F<span>&</span>R</span><span>Fork & Route</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <button class="nav-link active" data-view="discover">Discover</button>
+      <button class="nav-link" data-view="orders">My orders</button>
+      <button class="nav-link" data-view="insights">Live insights</button>
+    </nav>
+    <div class="top-actions">
+      <button class="profile-button" id="profileButton" aria-label="Configure demo profile">
+        <span class="avatar" id="avatar">01</span>
+        <span class="profile-copy"><small>Ordering as</small><strong id="profileName">Demo customer</strong></span>
+      </button>
+      <button class="cart-button" id="cartButton"><span>Bag</span><b id="cartCount">0</b></button>
+    </div>
+  </header>
+
+  <main>
+    <section class="view active" id="discoverView">
+      <div class="hero" id="home">
+        <div class="hero-copy">
+          <div class="eyebrow"><i></i> Real restaurants. Real SQL. Zero mystery totals.</div>
+          <h1>Good food,<br><em>beautifully routed.</em></h1>
+          <p>Explore local menus, build an order, and watch the database do the serious work—from coupon rules to delivery tracking.</p>
+          <div class="search-shell">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+            <input id="searchInput" type="search" placeholder="Search restaurants or cuisines…" autocomplete="off">
+            <kbd>⌘ K</kbd>
+          </div>
+          <div class="quick-facts"><span><b id="heroRestaurantCount">20</b> restaurants</span><span><b>1,200+</b> orders analyzed</span><span><b>Atomic</b> checkout</span></div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+          <div class="plate"><div class="leaf l1"></div><div class="leaf l2"></div><div class="food f1"></div><div class="food f2"></div><div class="food f3"></div><span>fresh<br><b>by design</b></span></div>
+          <div class="floating-card fc-one"><span>★</span><div><b>4.8 average</b><small>customer delight</small></div></div>
+          <div class="floating-card fc-two"><span>↗</span><div><b>Live totals</b><small>calculated server-side</small></div></div>
+        </div>
+      </div>
+
+      <section class="content-section">
+        <div class="section-head">
+          <div><span class="kicker">CURATED NEAR YOU</span><h2>What are you craving?</h2></div>
+          <div class="filter-row" id="cuisineFilters"><button class="chip active" data-cuisine="all">All</button></div>
+        </div>
+        <div class="restaurant-grid" id="restaurantGrid" aria-live="polite"></div>
+        <div class="empty-state hidden" id="restaurantEmpty"><span>⌕</span><h3>No exact matches</h3><p>Try another restaurant name or cuisine.</p></div>
+      </section>
+    </section>
+
+    <section class="view" id="ordersView">
+      <div class="page-hero compact"><div><span class="kicker">ORDER CONTROL</span><h1>Your delivery timeline</h1><p>Every transition is validated and written to status history by PostgreSQL.</p></div><button class="outline-button" id="refreshOrders">Refresh orders ↻</button></div>
+      <section class="content-section"><div class="order-list" id="orderList"></div></section>
+    </section>
+
+    <section class="view" id="insightsView">
+      <div class="page-hero compact"><div><span class="kicker">DATABASE PULSE</span><h1>Operations, without the guesswork</h1><p>Live KPIs backed by PostgreSQL views, aggregations, and analytical queries.</p></div><a class="outline-button" href="/docs" target="_blank">Explore API ↗</a></div>
+      <section class="content-section insights">
+        <div class="metric-grid" id="metricGrid"></div>
+        <div class="chart-grid">
+          <article class="panel wide"><div class="panel-head"><div><span>DELIVERED REVENUE</span><h3>Daily sales momentum</h3></div><div class="legend"><i></i> Last 30 data points</div></div><div class="chart" id="salesChart"></div></article>
+          <article class="panel"><div class="panel-head"><div><span>LEADERBOARD</span><h3>Restaurant performance</h3></div></div><div class="leaderboard" id="leaderboard"></div></article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="drawer" id="menuDrawer" aria-hidden="true">
+    <div class="drawer-head"><div><span class="kicker">MENU</span><h2 id="menuRestaurantName">Restaurant</h2><p id="menuRestaurantMeta"></p></div><button class="icon-button close-drawer" aria-label="Close">×</button></div>
+    <div class="menu-toolbar"><input id="menuSearch" type="search" placeholder="Search this menu"><label><input id="vegOnly" type="checkbox"><span>Veg only</span></label></div>
+    <div class="menu-list" id="menuList"></div>
+  </aside>
+
+  <aside class="drawer cart-drawer" id="cartDrawer" aria-hidden="true">
+    <div class="drawer-head"><div><span class="kicker">YOUR BAG</span><h2>Dinner, assembled.</h2><p id="cartRestaurant">Choose a restaurant to begin</p></div><button class="icon-button close-drawer" aria-label="Close">×</button></div>
+    <div class="cart-items" id="cartItems"></div>
+    <div class="checkout-box" id="checkoutBox">
+      <label class="field"><span>Coupon code <small>optional</small></span><input id="couponCode" placeholder="Try WELCOME20"></label>
+      <div class="payment-options"><span>Payment</span><label><input type="radio" name="payment" value="UPI" checked> UPI</label><label><input type="radio" name="payment" value="CARD"> Card</label><label><input type="radio" name="payment" value="CASH"> Cash</label></div>
+      <div class="cart-summary"><div><span>Item subtotal</span><b id="cartSubtotal">₹0</b></div><div><span>Delivery + tax</span><small>calculated securely at checkout</small></div></div>
+      <button class="primary-button" id="checkoutButton">Place order securely <span>→</span></button>
+      <p class="secure-note">◇ Totals are calculated server-side in one ACID transaction</p>
+    </div>
+  </aside>
+
+  <dialog id="profileDialog">
+    <form method="dialog" id="profileForm">
+      <button class="icon-button dialog-close" value="cancel" aria-label="Close">×</button><span class="kicker">DEMO PROFILE</span><h2>Connect to a seeded customer</h2><p>Use any existing customer and address ID. Defaults 1 and 1 work with the generated dataset.</p>
+      <label class="field"><span>Customer ID</span><input id="userId" type="number" min="1" required value="1"></label>
+      <label class="field"><span>Delivery address ID</span><input id="addressId" type="number" min="1" required value="1"></label>
+      <div class="dialog-actions"><button class="text-button" value="cancel">Cancel</button><button class="primary-button" id="saveProfile" value="default">Use this profile</button></div>
+    </form>
+  </dialog>
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+  <footer><div class="brand"><span class="brand-mark">F<span>&</span>R</span><span>Fork & Route</span></div><p>A database-first food delivery platform. Built with FastAPI, PostgreSQL, and unreasonable care.</p><div><a href="/docs">API docs</a><a href="https://github.com/Snapskillz123/food-delivery-dbms" target="_blank">Source ↗</a></div></footer>
+</body>
+</html>

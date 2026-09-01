@@ -1,6 +1,8 @@
 import logging
+from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 from app.config import settings
 from app.routers import analytics, orders, payments, restaurants, users
@@ -20,3 +22,12 @@ async def integrity_error_handler(_: Request, exc: IntegrityError):
 @app.get("/health", tags=["system"])
 async def health():
     return {"status": "ok"}
+
+
+WEB_DIR = Path(__file__).resolve().parent / "web"
+app.mount("/site-assets", StaticFiles(directory=WEB_DIR / "assets"), name="site-assets")
+
+
+@app.get("/", include_in_schema=False)
+async def website():
+    return FileResponse(WEB_DIR / "index.html")
